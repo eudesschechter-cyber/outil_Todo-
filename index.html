@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>Mon outil</title>
+<!-- Ce qui rend l'app installable (fiche d'identité + icônes) -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Outil">
+<style>
+/* =========================================================
+   STYLE (CSS) : couleurs, tailles, mise en page
+   Les "variables" (--bg, --text...) évitent de répéter les couleurs.
+   ========================================================= */
+:root{
+  --bg:#f2f2f7; --card:#fff; --text:#1c1c1e; --muted:#8e8e93; --line:#e5e5ea;
+  --accent:#007aff; --danger:#ff3b30; --prio:#ff9500; --ok:#34c759;
+}
+/* Mode sombre automatique, comme les apps Apple */
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#000; --card:#1c1c1e; --text:#f2f2f7; --line:#2c2c2e; --accent:#0a84ff; --danger:#ff453a; --prio:#ff9f0a; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+
+.app{max-width:720px;margin:0 auto;padding:0 16px calc(90px + env(safe-area-inset-bottom))}
+header{padding:calc(20px + env(safe-area-inset-top)) 4px 4px}
+h1{font-size:32px;font-weight:700;margin:0;letter-spacing:-.02em}
+.sous-titre{color:var(--muted);font-size:15px;margin-top:2px}
+.sous-titre::first-letter{text-transform:uppercase}
+
+/* Onglets : en bas sur téléphone, en haut sur ordinateur */
+nav.onglets{position:fixed;left:0;right:0;bottom:0;display:flex;z-index:10;
+  background:color-mix(in srgb,var(--card) 85%,transparent);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav.onglets button{flex:1;border:0;background:none;padding:8px 0 6px;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
+nav.onglets .ico{font-size:22px;line-height:1}
+nav.onglets button.on{color:var(--accent)}
+@media (min-width:760px){
+  nav.onglets{position:sticky;top:0;bottom:auto;border-top:0;border-bottom:1px solid var(--line);justify-content:center;gap:6px;padding:8px}
+  nav.onglets button{flex:0 0 auto;flex-direction:row;font-size:15px;padding:8px 16px;border-radius:10px;gap:8px}
+  nav.onglets button.on{background:var(--bg)}
+  nav.onglets .ico{font-size:17px}
+  .app{padding-bottom:40px}
+}
+.vue{display:none}
+.vue.on{display:block}
+
+.carte{background:var(--card);border-radius:12px;overflow:hidden}
+
+/* Formulaire d'ajout */
+.ajout{padding:12px;margin:14px 0 6px}
+.ajout input[type=text]{width:100%;border:0;background:none;font-size:17px;outline:none;padding:4px 0}
+.options{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.puce{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 10px;font-size:14px;min-height:34px}
+.puce.on{border-color:var(--prio);color:var(--prio);font-weight:600}
+.btn-principal{margin-left:auto;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:7px 16px;font-weight:600;min-height:34px}
+
+/* Liste des tâches */
+h2{font-size:13px;text-transform:uppercase;color:var(--muted);font-weight:600;margin:22px 4px 6px;letter-spacing:.03em}
+h2.retard{color:var(--danger)}
+.tache{display:flex;align-items:center;gap:12px;padding:11px 12px;border-bottom:1px solid var(--line)}
+.carte > :last-child{border-bottom:0}
+.coche{width:24px;height:24px;border-radius:50%;border:2px solid var(--muted);background:none;flex:0 0 auto;padding:0;position:relative}
+.p1 .coche{border-color:var(--prio)}
+.coche.faite{background:var(--ok);border-color:var(--ok)}
+.coche.faite::after{content:"✓";color:#fff;font-size:14px;position:absolute;inset:0;display:grid;place-items:center}
+.corps{flex:1;min-width:0;cursor:pointer}
+.nom{font-size:17px;overflow-wrap:anywhere}
+.fini .nom{color:var(--muted);text-decoration:line-through}
+.meta{font-size:13px;color:var(--muted);margin-top:2px}
+.meta .retard{color:var(--danger)}
+.drapeau{color:var(--prio);font-weight:700;margin-right:4px}
+.decaler{border:0;background:var(--bg);color:var(--accent);border-radius:8px;padding:6px 10px;font-size:14px;font-weight:600;flex:0 0 auto}
+
+/* Panneau d'édition (s'ouvre quand on touche une tâche) */
+.edition{padding:12px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 50%,var(--card))}
+.edition input[type=text]{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--card);font-size:16px}
+.edition .options{margin-top:10px}
+.danger{color:var(--danger)}
+
+details{margin-top:22px}
+summary{font-size:13px;text-transform:uppercase;color:var(--muted);font-weight:600;letter-spacing:.03em;padding:0 4px 6px;cursor:pointer}
+.vide{color:var(--muted);text-align:center;padding:40px 0;font-size:15px}
+.bientot{padding:20px;margin-top:14px;line-height:1.5;color:var(--muted)}
+
+/* Petit message temporaire en bas de l'écran */
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--text);color:var(--bg);
+  padding:10px 14px;border-radius:10px;font-size:14px;display:flex;gap:14px;align-items:center;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:90%}
+.toast.on{opacity:1;pointer-events:auto}
+.toast button{border:0;background:none;color:var(--accent);font-weight:600;padding:0}
+@media (min-width:760px){.toast{bottom:24px}}
+</style>
+</head>
+<body>
+
+<!-- =========================================================
+     STRUCTURE (HTML) : ce qui s'affiche à l'écran
+     ========================================================= -->
+<nav class="onglets">
+  <button data-onglet="todo"><span class="ico">☑︎</span>Todo</button>
+  <button data-onglet="news"><span class="ico">📰</span>News</button>
+  <button data-onglet="apprendre"><span class="ico">💡</span>Apprendre</button>
+</nav>
+
+<main class="app">
+  <!-- Onglet 1 : Todo -->
+  <section class="vue" id="vue-todo">
+    <header><h1>À faire</h1><div class="sous-titre" id="date-du-jour"></div></header>
+
+    <form class="carte ajout" id="form-ajout" autocomplete="off">
+      <input type="text" id="champ-nom" placeholder="Nouvelle tâche…" enterkeyhint="done">
+      <div class="options">
+        <input type="date" id="champ-date" class="puce" aria-label="Échéance">
+        <button type="button" id="champ-prio" class="puce">Prio</button>
+        <select id="champ-repet" class="puce" aria-label="Répétition">
+          <option value="aucune">Une fois</option>
+          <option value="jour">Chaque jour</option>
+          <option value="semaine">Chaque semaine</option>
+          <option value="mois">Chaque mois</option>
+        </select>
+        <button type="submit" class="btn-principal">Ajouter</button>
+      </div>
+    </form>
+
+    <div id="liste"></div>
+  </section>
+
+  <!-- Onglet 2 : News (étape 2) -->
+  <section class="vue" id="vue-news">
+    <header><h1>News</h1><div class="sous-titre">Le Monde · Le Figaro</div></header>
+    <div class="carte bientot">Étape 2 : chaque matin, les 2 news principales du Monde et du Figaro, résumées par Claude.</div>
+  </section>
+
+  <!-- Onglet 3 : Apprendre (étape 3) -->
+  <section class="vue" id="vue-apprendre">
+    <header><h1>Apprendre</h1><div class="sous-titre">Une chose par jour</div></header>
+    <div class="carte bientot">Étape 3 : un fait historique ou culturel par jour.</div>
+  </section>
+</main>
+
+<div class="toast" id="toast"><span id="toast-texte"></span><button id="toast-action"></button></div>
+
+<script>
+/* =========================================================
+   LOGIQUE (JavaScript) : ce qui se passe quand tu cliques
+   ========================================================= */
+
+// ---------- 1. Raccourcis ----------
+const $  = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+// Crée un élément HTML : el('div', {class:'x'}, 'texte')
+function el(balise, attributs = {}, ...enfants) {
+  const n = document.createElement(balise);
+  for (const [k, v] of Object.entries(attributs)) n.setAttribute(k, v);
+  n.append(...enfants.filter(e => e !== null && e !== false && e !== undefined));
+  return n;
+}
+
+// ---------- 2. Sauvegarde (dans le navigateur, pour l'instant) ----------
+// localStorage = petite mémoire du navigateur, propre à CET appareil.
+// À l'étape 2, on la remplacera par Supabase pour synchroniser tel + ordi.
+const CLE = 'outil.taches.v1';
+let taches = charger();
+function charger() { try { return JSON.parse(localStorage.getItem(CLE)) || []; } catch (e) { return []; } }
+function sauver()  { try { localStorage.setItem(CLE, JSON.stringify(taches)); } catch (e) {} }
+
+// ---------- 3. Dates ----------
+// On stocke les dates en texte "2026-11-12" : facile à comparer et à trier.
+const pad = n => String(n).padStart(2, '0');
+const versTexte = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const versDate  = s => { const [a, m, j] = s.split('-').map(Number); return new Date(a, m - 1, j); };
+const aujourdhui = () => versTexte(new Date());
+function plusJours(s, n) { const d = versDate(s); d.setDate(d.getDate() + n); return versTexte(d); }
+function plusMois(s, n) {
+  const d = versDate(s), jour = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n);
+  const dernierJour = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(jour, dernierJour)); // 31 janv. -> 28 févr.
+  return versTexte(d);
+}
+const REPETITIONS = { aucune: '', jour: 'Chaque jour', semaine: 'Chaque semaine', mois: 'Chaque mois' };
+function occurrenceSuivante(s, repet) {
+  if (repet === 'jour') return plusJours(s, 1);
+  if (repet === 'semaine') return plusJours(s, 7);
+  if (repet === 'mois') return plusMois(s, 1);
+  return s;
+}
+function libelleDate(s) {
+  if (!s) return '';
+  const a = aujourdhui();
+  if (s === a) return "Aujourd'hui";
+  if (s === plusJours(a, 1)) return 'Demain';
+  if (s === plusJours(a, -1)) return 'Hier';
+  return versDate(s).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+// ---------- 4. Actions sur les tâches ----------
+function creer(nom, date, prio, repet) {
+  taches.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    nom, prio, repet,
+    date: date || (repet !== 'aucune' ? aujourdhui() : ''), // une tâche récurrente a forcément une date
+    fait: false
+  });
+  sauver(); afficher();
+}
+
+function cocher(t) {
+  if (t.repet !== 'aucune' && !t.fait) {
+    // Tâche récurrente : au lieu de la terminer, on la reprogramme
+    // à la prochaine occurrence qui tombe APRÈS aujourd'hui.
+    const a = aujourdhui();
+    let suivante = occurrenceSuivante(t.date || a, t.repet);
+    while (suivante <= a) suivante = occurrenceSuivante(suivante, t.repet);
+    t.date = suivante;
+    toast('Reprogrammée : ' + libelleDate(suivante));
+  } else {
+    t.fait = !t.fait;
+    t.faiteLe = Date.now();
+  }
+  sauver(); afficher();
+}
+
+// Bouton "+1j" : décale d'un jour (à partir d'aujourd'hui si la tâche est en retard)
+function decaler(t) {
+  const a = aujourdhui();
+  const base = t.date && t.date > a ? t.date : a;
+  t.date = plusJours(base, 1);
+  sauver(); afficher();
+  toast('Décalée : ' + libelleDate(t.date));
+}
+
+function supprimer(t) {
+  const index = taches.indexOf(t);
+  taches.splice(index, 1);
+  ouverte = null;
+  sauver(); afficher();
+  toast('Supprimée', 'Annuler', () => { taches.splice(index, 0, t); sauver(); afficher(); });
+}
+
+// ---------- 5. Affichage ----------
+let ouverte = null; // id de la tâche dont le panneau d'édition est ouvert
+
+function afficher() {
+  $('#date-du-jour').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const liste = $('#liste');
+  liste.replaceChildren();
+
+  const a = aujourdhui(), demain = plusJours(a, 1);
+  // Tri : prio 1 d'abord, puis par date
+  const actives = taches.filter(t => !t.fait)
+    .sort((x, y) => (y.prio - x.prio) || (x.date || '9999').localeCompare(y.date || '9999'));
+
+  const groupes = [
+    ['En retard',   t => t.date && t.date < a, 'retard'],
+    ["Aujourd'hui", t => t.date === a],
+    ['Demain',      t => t.date === demain],
+    ['Plus tard',   t => t.date > demain],
+    ['Sans date',   t => !t.date],
+  ];
+  for (const [titre, filtre, classe] of groupes) {
+    const dedans = actives.filter(filtre);
+    if (!dedans.length) continue;
+    liste.append(el('h2', classe ? { class: classe } : {}, titre));
+    const carte = el('div', { class: 'carte' });
+    dedans.forEach(t => carte.append(...ligne(t)));
+    liste.append(carte);
+  }
+  if (!actives.length) liste.append(el('div', { class: 'vide' }, 'Rien à faire. Profite.'));
+
+  // Tâches terminées (repliées)
+  const finies = taches.filter(t => t.fait).sort((x, y) => (y.faiteLe || 0) - (x.faiteLe || 0));
+  if (finies.length) {
+    const carte = el('div', { class: 'carte' });
+    finies.slice(0, 30).forEach(t => carte.append(...ligne(t)));
+    const vider = el('button', { class: 'puce danger', style: 'margin-top:10px' }, 'Effacer les terminées');
+    vider.onclick = () => { taches = taches.filter(t => !t.fait); sauver(); afficher(); };
+    liste.append(el('details', {}, el('summary', {}, `Terminées (${finies.length})`), carte, vider));
+  }
+}
+
+// Une ligne = la tâche (+ son panneau d'édition si elle est ouverte)
+function ligne(t) {
+  const enRetard = t.date && t.date < aujourdhui() && !t.fait;
+  const ligneTache = el('div', { class: 'tache' + (t.prio ? ' p1' : '') + (t.fait ? ' fini' : '') });
+
+  const coche = el('button', { class: 'coche' + (t.fait ? ' faite' : ''), 'aria-label': 'Terminer' });
+  coche.onclick = () => cocher(t);
+
+  const meta = [];
+  if (t.date) meta.push(el('span', enRetard ? { class: 'retard' } : {}, libelleDate(t.date)));
+  if (t.repet !== 'aucune') meta.push((meta.length ? ' · ' : '') + '↻ ' + REPETITIONS[t.repet]);
+
+  const corps = el('div', { class: 'corps' },
+    el('div', { class: 'nom' }, t.prio ? el('span', { class: 'drapeau' }, '!') : null, t.nom),
+    meta.length ? el('div', { class: 'meta' }, ...meta) : null
+  );
+  corps.onclick = () => { ouverte = (ouverte === t.id ? null : t.id); afficher(); };
+
+  ligneTache.append(coche, corps);
+  if (!t.fait) {
+    const bouton = el('button', { class: 'decaler', title: 'Décaler d\'un jour' }, '+1j');
+    bouton.onclick = () => decaler(t);
+    ligneTache.append(bouton);
+  }
+  return ouverte === t.id ? [ligneTache, editeur(t)] : [ligneTache];
+}
+
+function editeur(t) {
+  const nom = el('input', { type: 'text', value: t.nom, enterkeyhint: 'done' });
+  nom.onchange = () => { const v = nom.value.trim(); if (v) { t.nom = v; sauver(); } };
+  nom.onkeydown = e => { if (e.key === 'Enter') { nom.blur(); ouverte = null; afficher(); } };
+
+  const date = el('input', { type: 'date', class: 'puce', value: t.date || '' });
+  date.onchange = () => { t.date = date.value; sauver(); afficher(); };
+
+  const boutonDate = (texte, calcul) => {
+    const b = el('button', { class: 'puce' }, texte);
+    b.onclick = () => { t.date = calcul(); sauver(); afficher(); };
+    return b;
+  };
+  const a = aujourdhui();
+
+  const prio = el('button', { class: 'puce' + (t.prio ? ' on' : '') }, t.prio ? '! Prio 1' : 'Prio 0');
+  prio.onclick = () => { t.prio = t.prio ? 0 : 1; sauver(); afficher(); };
+
+  const repet = el('select', { class: 'puce' },
+    ...Object.entries({ aucune: 'Une fois', jour: 'Chaque jour', semaine: 'Chaque semaine', mois: 'Chaque mois' })
+      .map(([v, l]) => el('option', { value: v }, l)));
+  repet.value = t.repet;
+  repet.onchange = () => { t.repet = repet.value; if (t.repet !== 'aucune' && !t.date) t.date = a; sauver(); afficher(); };
+
+  const suppr = el('button', { class: 'puce danger' }, 'Supprimer');
+  suppr.onclick = () => supprimer(t);
+
+  const fermer = el('button', { class: 'btn-principal' }, 'OK');
+  fermer.onclick = () => { if (nom.value.trim()) t.nom = nom.value.trim(); ouverte = null; sauver(); afficher(); };
+
+  return el('div', { class: 'edition' },
+    nom,
+    el('div', { class: 'options' }, date,
+      boutonDate("Auj.", () => a), boutonDate('Demain', () => plusJours(a, 1)), boutonDate('+1 sem', () => plusJours(t.date && t.date > a ? t.date : a, 7))),
+    el('div', { class: 'options' }, prio, repet, suppr, fermer)
+  );
+}
+
+// ---------- 6. Message temporaire ----------
+let minuteur;
+function toast(texte, action, quandClic) {
+  $('#toast-texte').textContent = texte;
+  const b = $('#toast-action');
+  b.textContent = action || '';
+  b.style.display = action ? '' : 'none';
+  b.onclick = () => { quandClic && quandClic(); $('#toast').classList.remove('on'); };
+  $('#toast').classList.add('on');
+  clearTimeout(minuteur);
+  minuteur = setTimeout(() => $('#toast').classList.remove('on'), 3500);
+}
+
+// ---------- 7. Formulaire d'ajout ----------
+let nouvellePrio = 0;
+const reinitialiserFormulaire = () => {
+  $('#champ-nom').value = '';
+  $('#champ-date').value = aujourdhui();
+  $('#champ-repet').value = 'aucune';
+  nouvellePrio = 0;
+  $('#champ-prio').classList.remove('on');
+  $('#champ-prio').textContent = 'Prio';
+};
+$('#champ-prio').onclick = () => {
+  nouvellePrio = nouvellePrio ? 0 : 1;
+  $('#champ-prio').classList.toggle('on', !!nouvellePrio);
+  $('#champ-prio').textContent = nouvellePrio ? '! Prio 1' : 'Prio';
+};
+$('#form-ajout').onsubmit = e => {
+  e.preventDefault(); // empêche la page de se recharger
+  const nom = $('#champ-nom').value.trim();
+  if (!nom) return;
+  creer(nom, $('#champ-date').value, nouvellePrio, $('#champ-repet').value);
+  reinitialiserFormulaire();
+};
+
+// ---------- 8. Onglets ----------
+function changerOnglet(nom) {
+  $$('.vue').forEach(v => v.classList.toggle('on', v.id === 'vue-' + nom));
+  $$('nav.onglets button').forEach(b => b.classList.toggle('on', b.dataset.onglet === nom));
+  try { localStorage.setItem('outil.onglet', nom); } catch (e) {}
+}
+$$('nav.onglets button').forEach(b => b.onclick = () => changerOnglet(b.dataset.onglet));
+
+// ---------- 9. Démarrage ----------
+let ongletInitial = 'todo';
+try { ongletInitial = localStorage.getItem('outil.onglet') || 'todo'; } catch (e) {}
+changerOnglet(ongletInitial);
+reinitialiserFormulaire();
+afficher();
+// Quand on rouvre l'app (ex : le lendemain), on recalcule "Aujourd'hui" / "En retard"
+document.addEventListener('visibilitychange', () => { if (!document.hidden) afficher(); });
+
+// ---------- 10. Mode app installée ----------
+// On active le "service worker" (sw.js) qui garde l'app en mémoire sur l'appareil.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
